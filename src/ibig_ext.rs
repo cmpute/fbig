@@ -22,12 +22,14 @@ pub fn log_rem(x: &UBig, base: usize) -> (usize, UBig) {
     let mut counter = 0;
     let mut exp = ubig!(1);
 
-    while &(&exp * base) < x {
-        exp *= base;
+    loop {
+        let new_exp = &exp * base;
+        if &new_exp > x {
+            break (counter, x - exp);
+        }
+        exp = new_exp;
         counter += 1;
     }
-    let rem = x - exp / base;
-    (counter, rem)
 }
 
 /// Calculate log_base(x^exp), return the floored value and remainder.
@@ -57,4 +59,18 @@ pub fn remove_pow(x: &mut IBig, base: &IBig) -> UBig {
         counter += 1u8;
     }
     return counter;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_log_rem() {
+        assert_eq!(log_rem(&ubig!(1), 2), (0, ubig!(0)));
+        assert_eq!(log_rem(&ubig!(2), 2), (1, ubig!(0)));
+        assert_eq!(log_rem(&ubig!(3), 2), (1, ubig!(1)));
+        assert_eq!(log_rem(&ubig!(3), 10), (0, ubig!(2)));
+        assert_eq!(log_rem(&ubig!(13), 10), (1, ubig!(3)));
+    }
 }

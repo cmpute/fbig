@@ -17,6 +17,8 @@ mod parse;
 mod ibig_ext;
 mod sign;
 mod utils;
+mod mul;
+mod div;
 
 pub use repr::{FloatRepr, BinaryRepr, DecimalRepr, RoundingMode};
 

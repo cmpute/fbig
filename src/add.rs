@@ -1,6 +1,5 @@
 use core::ops::{Add, Sub};
-use ibig::UBig;
-use crate::utils::{shl_radix, shr_radix};
+use crate::utils::{shl_radix, shr_radix, get_precision};
 
 use crate::repr::FloatRepr;
 
@@ -23,29 +22,52 @@ impl<const E: usize, const R: u8> Add for FloatRepr<E, R> {
         }
 
         // align the exponent
-        let rhs_prec = Self::actual_precision(&rhs.mantissa);
-        if ediff + rhs_prec > desire_prec {
+        let rhs_prec = lhs.actual_precision();
+        let exponent = if ediff + rhs_prec > desire_prec {
             debug_assert!(rhs_prec <= desire_prec);
             let shift = desire_prec - rhs_prec;
-            shl_radix::<E>(&mut lhs.mantissa, shift);
-            shr_radix::<E>(&mut rhs.mantissa, ediff - shift);
-            rhs.exponent -= (ediff - shift) as isize;
+            shr_radix::<E>(&mut lhs.mantissa, shift);
+            shl_radix::<E>(&mut rhs.mantissa, ediff - shift);
+            rhs.exponent - (ediff - shift) as isize
         } else {
-            shl_radix::<E>(&mut lhs.mantissa, ediff);
-        }
+            shr_radix::<E>(&mut lhs.mantissa, ediff);
+            rhs.exponent
+        };
 
         // actuall adding
         let mantissa = lhs.mantissa + rhs.mantissa;
-        let exponent = rhs.exponent;
-        Self::from_parts_with_precision(mantissa, exponent, desire_prec)
+        Self::from_parts_with_precision(mantissa, exponent, desire_prec - 1)
     }
 }
 
 impl<const E: usize, const R: u8> Sub for FloatRepr<E, R> {
     type Output = Self;
-
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
         return self.add(-rhs);
     }
 }
+
+// TODO: carefully determine whether the opperations take reference or value
+impl<const E: usize, const R: u8> Add for &FloatRepr<E, R> {
+    type Output = FloatRepr<E, R>;
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        self.clone().add(rhs.clone())
+    }
+}
+impl<const E: usize, const R: u8> Sub for &FloatRepr<E, R> {
+    type Output = FloatRepr<E, R>;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.add(&(-rhs))
+    }
+}
+impl<const E: usize, const R: u8> Sub<FloatRepr<E, R>> for &FloatRepr<E, R> {
+    type Output = FloatRepr<E, R>;
+    #[inline]
+    fn sub(self, rhs: FloatRepr<E, R>) -> Self::Output {
+        self.add(&(-rhs))
+    }
+}
+

@@ -4,18 +4,23 @@ use crate::repr::FloatRepr;
 
 impl<const E: usize, const R: u8> Neg for FloatRepr<E, R> {
     type Output = Self;
+    fn neg(mut self) -> Self::Output {
+        self.mantissa = -self.mantissa;
+        self
+    }
+}
+
+impl<const E: usize, const R: u8> Neg for &FloatRepr<E, R> {
+    type Output = FloatRepr<E, R>;
     fn neg(self) -> Self::Output {
-        let mut result = self;
-        result.mantissa = -result.mantissa;
-        result
+        self.clone().neg()
     }
 }
 
 impl<const E: usize, const R: u8> Abs for FloatRepr<E, R> {
     type Output = Self;
-    fn abs(self) -> Self::Output {
-        let mut result = self;
-        result.mantissa = result.mantissa.abs();
-        result
+    fn abs(mut self) -> Self::Output {
+        self.mantissa = self.mantissa.abs();
+        self
     }
 }

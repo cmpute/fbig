@@ -1,7 +1,7 @@
 use core::str::FromStr;
 use core::num::IntErrorKind;
 use ibig::{IBig, error::ParseError};
-use crate::repr::FloatRepr;
+use crate::{repr::FloatRepr, utils::get_precision};
 
 impl<const E: usize, const R: u8> FromStr for FloatRepr<E, R> {
     type Err = ParseError;
@@ -80,11 +80,11 @@ impl<const E: usize, const R: u8> FromStr for FloatRepr<E, R> {
             }
             (Some(dot), None) => {
                 let trunc = IBig::from_str_radix(&src[..dot], E as u32)?;
-                let frac = IBig::from_str_radix(&src[dot+1..], E as u32)?;
+                let fract = IBig::from_str_radix(&src[dot+1..], E as u32)?;
                 
-                let frac_digits = Self::actual_precision(&frac);
-                let mantissa = trunc * IBig::from(E).pow(frac_digits) + frac;
-                Self::from_parts(mantissa, -(frac_digits as isize))
+                let fract_digits = get_precision::<E>(&fract);
+                let mantissa = trunc * IBig::from(E).pow(fract_digits) + fract;
+                Self::from_parts(mantissa, -(fract_digits as isize))
             },
             (None, Some(s)) => {
                 let mantissa = IBig::from_str_radix(&src, E as u32)?;
@@ -92,11 +92,11 @@ impl<const E: usize, const R: u8> FromStr for FloatRepr<E, R> {
             },
             (Some(dot), Some(s)) => {
                 let trunc = IBig::from_str_radix(&src[..dot], E as u32)?;
-                let frac = IBig::from_str_radix(&src[dot+1..], E as u32)?;
+                let fract = IBig::from_str_radix(&src[dot+1..], E as u32)?;
 
-                let frac_digits = Self::actual_precision(&frac);
-                let mantissa = trunc * IBig::from(E).pow(frac_digits) + frac;
-                let exponent = s - frac_digits as isize;
+                let fract_digits = get_precision::<E>(&fract);
+                let mantissa = trunc * IBig::from(E).pow(fract_digits) + fract;
+                let exponent = s - fract_digits as isize;
                 Self::from_parts(mantissa, exponent)
             },
         };

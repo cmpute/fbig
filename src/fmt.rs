@@ -2,8 +2,8 @@
 
 use core::fmt::{self, Display, Formatter, Write};
 use std::convert::TryInto;
-use ibig::ops::Abs;
-use crate::{repr::FloatRepr, utils::{shr_rem_radix, round_with_rem, shr_radix}};
+use ibig::{ibig, ops::Abs};
+use crate::{repr::FloatRepr, utils::{shr_rem_radix, round_with_rem, shr_radix, get_precision}};
 
 // TODO: implement Debug using mantissa * radix ^ exponent (prec: xxx),
 // FIXME: sign, width and fill options are not yet correctly handled
@@ -18,11 +18,14 @@ impl<const E: usize, const R: u8> Display for FloatRepr<E, R> {
         if self.exponent < 0 {
             let exp = -self.exponent as usize;
             let (trunc, frac) = shr_rem_radix::<E>(&self.mantissa, exp);
-            let frac_prec = Self::actual_precision(&frac);
+            let frac_prec = get_precision::<E>(&frac);
             assert!(frac_prec <= exp);
             let mut frac = frac.abs(); // don't print sign for fractional part
 
             // print integral part
+            if trunc == ibig!(0) && self.mantissa < ibig!(0) {
+                f.write_char('-')?;
+            }
             trunc.in_radix(E as u32).fmt(f)?;
 
             // print fractional part
@@ -40,7 +43,7 @@ impl<const E: usize, const R: u8> Display for FloatRepr<E, R> {
                             frac = shifted;
                             shr_radix::<E>(&mut rem, exp - v - 1);
                             round_with_rem::<E, R>(&mut frac, rem.try_into().unwrap());
-                            Self::actual_precision(&frac)
+                            get_precision::<E>(&frac)
                         } else {
                             0
                         };
@@ -77,7 +80,7 @@ impl<const E: usize, const R: u8> Display for FloatRepr<E, R> {
         } else {
             // directly print the mantissa and append zeros if needed
             // precision doesn't make a difference since we force printing in native radix
-            self.mantissa.fmt(f)?;
+            self.mantissa.in_radix(E as u32).fmt(f)?;
             for _ in 0..self.exponent {
                 f.write_char('0')?;
             }

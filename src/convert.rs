@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use ibig::{IBig, ibig, UBig, ops::DivRem};
 use crate::{
     repr::{FloatRepr, BinaryRepr, DecimalRepr},
-    utils::{shr_radix, round_with_rem},
+    utils::{shr_radix, round_with_rem, get_precision},
     ibig_ext::{remove_pow, log_rem, log_pow}
 };
 
@@ -51,10 +51,17 @@ impl<const R: u8> From<f64> for BinaryRepr<R> {
 }
 
 impl<const E: usize, const R: u8> FloatRepr<E, R> {
+    /// Create a floating number from a integer
+    pub fn from_integer(integer: IBig, precision: usize) -> Self {
+        Self::from_parts_with_precision(integer, 0, precision)
+    }
+
     /// Create a floating number by dividing two integers with given precision
     pub fn from_ratio(numerator: IBig, denominator: IBig, precision: usize) -> Self {
+        // FIXME: investigate whether it's faster to first calculate the inverse of denom, and then multiply
+        // FIXME: find a way to use the fast div support from ibig
         let (mut mantissa, mut rem) = numerator.div_rem(&denominator);
-        let mut digits = Self::actual_precision(&mantissa);
+        let mut digits = get_precision::<E>(&mantissa);
         let mut exponent = 0;
         if digits < precision {
             while digits < precision && &rem != &ibig!(0) {
@@ -80,12 +87,24 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
         self.with_radix::<10>()
     }
 
+    /// Convert the float number to decimal based exponents.
+    #[inline]
+    pub fn to_decimal(&self) -> DecimalRepr<R> {
+        self.clone().with_radix::<10>()
+    }
+
     /// Convert the float number to binary based exponents.
     /// 
     /// It's equivalent to [Self::with_radix::<2>()]
     #[inline]
     pub fn into_binary(self) -> BinaryRepr<R> {
         self.with_radix::<2>()
+    }
+
+    /// Convert the float number to decimal based exponents.
+    #[inline]
+    pub fn to_binary(&self) -> BinaryRepr<R> {
+        self.clone().with_radix::<2>()
     }
 
     /// Explicitly change the precision of the number.
@@ -97,12 +116,14 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
 
         // shrink if possible
         if result.precision > precision {
-            let actual = Self::actual_precision(&result.mantissa);
+            let actual = result.actual_precision();
             if actual > precision {
-                shr_radix::<E>(&mut result.mantissa, actual - precision - 1);
+                let shift = actual - precision;
+                shr_radix::<E>(&mut result.mantissa, shift - 1); // left one additional digit for rounding
                 let (mut man, rem) = result.mantissa.div_rem(E as isize);
                 round_with_rem::<E, R>(&mut man, rem);
                 result.mantissa = man;
+                result.exponent += shift as isize;
             }
         }
 
@@ -131,6 +152,7 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
         if NewE == E {
             return FloatRepr { mantissa: self.mantissa, exponent: self.exponent, precision: self.precision };
         }
+        // FIXME: shortcut if E is a power of NewE
 
         // Calculate the new precision
         // new_precision = floor_log_radix2(radix1^precision)
@@ -138,7 +160,10 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
 
         // Convert by calculating logarithm
         // FIXME: currently the calculation is done in full precision, could be vastly optimized
-        let result = if self.exponent > 0 {
+        let result = if self.exponent == 0 {
+            // direct copy if the exponent is zero
+            return FloatRepr { mantissa: self.mantissa, exponent: 0, precision };
+        } else if self.exponent > 0 {
             // denote log with base of radix2 as lgr2, then
             // mantissa * radix1 ^ exp1
             // = mantissa * radix2 ^ lgr2(radix1^exp1)
@@ -171,7 +196,7 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
             let num = IBig::from(&precision_ub - log_r) * self.mantissa;
             let den = IBig::from(precision_ub);
             let mut value = FloatRepr::<NewE, R>::from_ratio(num, den, precision + 1);
-            value.exponent += log_v as isize;
+            value.exponent -= log_v as isize;
             value
         };
 
@@ -192,6 +217,7 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
     /// If the mantissa is larger than `radix^usize::MAX`
     #[inline]
     pub fn from_parts(mut mantissa: IBig, mut exponent: isize) -> Self {
+        // TODO: prevent using this function internally because we enforce normalized representation
         if E == 2 {
             if let Some(shift) = mantissa.trailing_zeros() {
                 mantissa >>= shift;
@@ -202,7 +228,7 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
             exponent += shift;
         }
 
-        let precision = Self::actual_precision(&mantissa);
+        let precision = get_precision::<E>(&mantissa);
         Self { mantissa, exponent, precision }
     }
 
@@ -216,5 +242,22 @@ impl<const E: usize, const R: u8> FloatRepr<E, R> {
     #[inline]
     pub fn into_parts(self) -> (IBig, isize) {
         (self.mantissa, self.exponent)
+    }
+
+    // TODO: let all these to_* functions return `Approximation`
+
+    /// Convert the float number to native [f32] with the given rounding mode.
+    fn to_f32(&self) -> f32 {
+        unimplemented!()
+    }
+
+    /// Convert the float number to native [f64] with the given rounding mode.
+    fn to_f64(&self) -> f64 {
+        unimplemented!()
+    }
+
+    /// Convert the float number to integer with the given rounding mode.
+    fn to_int(&self) -> IBig {
+        unimplemented!()
     }
 }

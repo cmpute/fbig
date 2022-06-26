@@ -1,8 +1,6 @@
 
-use std::convert::TryInto;
-
-use ibig::{IBig, ibig};
-use crate::ibig_ext::{log_rem, magnitude};
+use ibig::IBig;
+use crate::utils::get_precision;
 
 // FIXME: this should be a enum when enum const is supported in generic argument
 /// Defines rounding modes of the floating numbers.
@@ -26,12 +24,12 @@ pub mod RoundingMode {
 }
 
 /// An arbitrary precision floating number represented as `mantissa * radix^scale`
-/// mantissa < radix^precision. The representation is normalized when mantissa is coprime to radix.
+/// mantissa < radix^precision. The representation is always normalized (mantissa is not divisible by radix).
 ///
 /// The const generic parameters will be abbreviated as Radix -> E, Rounding -> R.
 /// Radix should be in range \[2, isize::MAX\], and Rounding value has to be one of [RoundingMode]
 #[allow(non_upper_case_globals)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FloatRepr<const Radix: usize, const Rounding: u8> {
     pub(crate) mantissa: IBig,
     pub(crate) exponent: isize,
@@ -39,22 +37,34 @@ pub struct FloatRepr<const Radix: usize, const Rounding: u8> {
 }
 
 impl<const E: usize, const R: u8> FloatRepr<E, R> {
+    /// Get the maximum precision set for the float number.
     #[inline]
     pub fn precision(&self) -> usize {
         self.precision
     }
 
-    /// Get the integer k such that `radix^(k-1) <= value < radix^k`.
-    /// If value is 0, then `k = 0` is returned.
+    /// Get the actual precision needed for the float number.
+    /// 
+    /// Shrink to this value using [Self::with_precision] will not cause loss of float precision.
     #[inline]
-    pub(crate) fn actual_precision(value: &IBig) -> usize {
-        if value == &ibig!(0) {
-            return 0
-        };
+    pub fn actual_precision(&self) -> usize {
+        get_precision::<E>(&self.mantissa)
+    }
 
-        let (e, _) = log_rem(&magnitude(value), E);
-        let e: usize = e.try_into().unwrap();
-        e + 1
+    fn ceil(&self) -> Self {
+        unimplemented!()
+    }
+
+    fn floor(&self) -> Self {
+        unimplemented!()
+    }
+
+    fn trunc(&self) -> Self {
+        unimplemented!()
+    }
+
+    fn fract(&self) -> Self {
+        unimplemented!()
     }
 }
 
